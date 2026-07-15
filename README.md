@@ -40,7 +40,7 @@ edit past history.
 
 ## Live demo
 
-Hosted via GitHub Pages: _(link added after deployment)_
+Hosted via GitHub Pages: https://muhammedzidris.github.io/streakchain/
 
 ## Screenshots
 
