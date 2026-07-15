@@ -5,14 +5,38 @@
 <title>StreakChain</title>
 <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 <style>
-  body { font-family: -apple-system, sans-serif; max-width: 500px; margin: 60px auto; padding: 0 20px; background: #0f1117; color: #eee; }
+  body { font-family: -apple-system, sans-serif; max-width: 560px; margin: 60px auto; padding: 0 20px; background: #0f1117; color: #eee; }
   h1 { font-size: 28px; }
   button { background: #4f9dff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 15px; cursor: pointer; margin-top: 10px; }
   button:disabled { background: #555; cursor: not-allowed; }
   input { padding: 10px; width: 100%; border-radius: 8px; border: 1px solid #444; background: #1a1d27; color: #eee; margin-top: 10px; box-sizing: border-box; }
   #status { margin-top: 15px; color: #9ab; font-size: 14px; }
-  .checkin { background: #1a1d27; padding: 10px; border-radius: 8px; margin-top: 8px; }
   #streak { font-size: 40px; font-weight: bold; color: #4f9dff; }
+  .stats { display: flex; gap: 12px; margin-top: 10px; }
+  .stat { flex: 1; background: #1a1d27; border-radius: 10px; padding: 14px; text-align: center; }
+  .stat .value { font-size: 28px; font-weight: bold; color: #4f9dff; }
+  .stat .label { font-size: 12px; color: #9ab; margin-top: 4px; }
+  .day { background: #1a1d27; padding: 12px 14px; border-radius: 10px; margin-top: 10px; }
+  .day .date { font-weight: 600; margin-bottom: 6px; }
+  .day .task { color: #cdd; font-size: 14px; padding: 3px 0; }
+  .day .task .time { color: #789; font-size: 12px; margin-left: 6px; }
+  .week { display: flex; justify-content: space-between; margin-top: 14px; }
+  .week .cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .week .dot { width: 32px; height: 32px; border-radius: 50%; background: #1a1d27; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #556; }
+  .week .cell.done .dot { background: #4f9dff; color: #fff; }
+  .week .cell.today .dot { box-shadow: 0 0 0 2px #4f9dff; }
+  .week .cell.future .dot { opacity: 0.4; }
+  .week .cell .label { font-size: 11px; color: #9ab; }
+  .row { display: flex; gap: 8px; }
+  .row input, .row button { margin-top: 0; }
+  .row button { white-space: nowrap; }
+  .hint { color: #9ab; font-size: 13px; margin-top: -6px; }
+  .divider { border-color: #222; margin: 28px 0; }
+  .task-row { display: flex; align-items: center; gap: 10px; background: #1a1d27; padding: 10px 12px; border-radius: 8px; margin-top: 8px; }
+  .task-row input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: #4f9dff; flex-shrink: 0; }
+  .task-row .name { flex: 1; font-size: 14px; }
+  .task-row.done .name { color: #6a8; text-decoration: line-through; }
+  .task-row .remove { background: none; border: none; color: #789; cursor: pointer; font-size: 16px; padding: 0; margin: 0; }
 </style>
 </head>
 <body>
@@ -23,14 +47,48 @@
 <button id="connectBtn">Connect Wallet</button>
 <div id="status"></div>
 
+<h3>🔍 Look up any streak</h3>
+<p class="hint">Paste any wallet address to view its public, onchain streak — no wallet needed.</p>
+<div class="row">
+  <input id="lookupInput" placeholder="0x... wallet address">
+  <button id="lookupBtn">View</button>
+</div>
+<div id="lookupStatus" class="hint" style="margin-top:8px;"></div>
+<div id="lookupResult" style="display:none;">
+  <div id="lookupStreak" style="font-size:32px; font-weight:bold; color:#4f9dff; margin-top:10px;"></div>
+  <div class="stats">
+    <div class="stat"><div class="value" id="lookupLongest">-</div><div class="label">Longest streak</div></div>
+    <div class="stat"><div class="value" id="lookupTotal">-</div><div class="label">Total check-ins</div></div>
+  </div>
+  <div id="lookupWeek" class="week"></div>
+  <div id="lookupHistory"></div>
+</div>
+
+<hr class="divider">
+
 <div id="app" style="display:none;">
   <p>Current streak:</p>
   <div id="streak">-</div>
 
-  <input id="habitInput" placeholder="e.g. Deep work session" value="Deep work session">
-  <button id="checkInBtn">Log Today's Check-in</button>
+  <div class="stats">
+    <div class="stat"><div class="value" id="longestStreak">-</div><div class="label">Longest streak</div></div>
+    <div class="stat"><div class="value" id="totalCheckIns">-</div><div class="label">Total check-ins</div></div>
+  </div>
 
-  <h3>History</h3>
+  <h3>This Week</h3>
+  <div id="weekRow" class="week"></div>
+
+  <h3>📋 Today's Tasks</h3>
+  <p class="hint">Add the tasks you need to do today, then check them off — each one logs a check-in onchain.</p>
+  <div class="row">
+    <input id="taskInput" placeholder="e.g. Read 20 pages">
+    <button id="addTaskBtn">Add</button>
+  </div>
+  <div id="taskList"></div>
+
+  <button id="shareBtn" style="background:#2a2d3a;">Copy My Streak</button>
+
+  <h3>Daily Log</h3>
   <div id="history"></div>
 </div>
 
@@ -38,18 +96,211 @@
 const CONTRACT_ADDRESS = "0x9668E06A1a295C9Feeef9E9b85e131efaF7171ed";
 const ABI = [
   "function logCheckIn(string habit) external",
-  "function getCheckIns(address user) external view returns (tuple(string habit, uint256 timestamp)[])",
-  "function getCurrentStreak(address user) external view returns (uint256)"
+  "function getCheckIns(address user) external view returns (tuple(string habit, uint256 timestamp)[])"
 ];
 
 let provider, signer, contract, userAddress;
 
 const connectBtn = document.getElementById("connectBtn");
-const checkInBtn = document.getElementById("checkInBtn");
 const statusEl = document.getElementById("status");
 const appEl = document.getElementById("app");
 const streakEl = document.getElementById("streak");
+const longestStreakEl = document.getElementById("longestStreak");
+const totalCheckInsEl = document.getElementById("totalCheckIns");
 const historyEl = document.getElementById("history");
+const weekRowEl = document.getElementById("weekRow");
+const shareBtn = document.getElementById("shareBtn");
+const taskInput = document.getElementById("taskInput");
+const addTaskBtn = document.getElementById("addTaskBtn");
+const taskListEl = document.getElementById("taskList");
+
+const lookupInput = document.getElementById("lookupInput");
+const lookupBtn = document.getElementById("lookupBtn");
+const lookupStatusEl = document.getElementById("lookupStatus");
+const lookupResultEl = document.getElementById("lookupResult");
+const lookupStreakEl = document.getElementById("lookupStreak");
+const lookupLongestEl = document.getElementById("lookupLongest");
+const lookupTotalEl = document.getElementById("lookupTotal");
+const lookupWeekEl = document.getElementById("lookupWeek");
+const lookupHistoryEl = document.getElementById("lookupHistory");
+
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const SITE_URL = "https://muhammedzidris.github.io/streakchain/";
+
+const readProvider = new ethers.providers.JsonRpcProvider("https://testnet-rpc.monad.xyz/");
+const readContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, readProvider);
+
+let myCurrentStreak = 0;
+let todayTasks = [];
+
+function tasksStorageKey() {
+  return `streakchain_tasks_${userAddress}_${new Date().toDateString()}`;
+}
+
+function loadTasks() {
+  try {
+    return JSON.parse(localStorage.getItem(tasksStorageKey())) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTasks() {
+  localStorage.setItem(tasksStorageKey(), JSON.stringify(todayTasks));
+}
+
+function renderTasks() {
+  taskListEl.innerHTML = "";
+  todayTasks.forEach((task, idx) => {
+    const row = document.createElement("div");
+    row.className = "task-row" + (task.done ? " done" : "");
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = task.done;
+    checkbox.disabled = task.done;
+    checkbox.onchange = () => completeTask(idx, checkbox, row);
+    row.appendChild(checkbox);
+
+    const name = document.createElement("div");
+    name.className = "name";
+    name.innerText = task.name;
+    row.appendChild(name);
+
+    if (!task.done) {
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "remove";
+      removeBtn.innerText = "✕";
+      removeBtn.onclick = () => {
+        todayTasks.splice(idx, 1);
+        saveTasks();
+        renderTasks();
+      };
+      row.appendChild(removeBtn);
+    }
+
+    taskListEl.appendChild(row);
+  });
+}
+
+async function completeTask(idx, checkbox, row) {
+  const task = todayTasks[idx];
+  checkbox.disabled = true;
+  try {
+    const tx = await contract.logCheckIn(task.name);
+    await tx.wait();
+    task.done = true;
+    saveTasks();
+    row.classList.add("done");
+    await refreshData();
+  } catch (err) {
+    checkbox.checked = false;
+    checkbox.disabled = false;
+    statusEl.innerText = "Error: " + (err.reason || err.message);
+  }
+}
+
+function dayStart(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function groupByDay(checkIns) {
+  const days = new Map();
+  checkIns.forEach(c => {
+    const date = new Date(c.timestamp.toNumber() * 1000);
+    const key = dayStart(date);
+    if (!days.has(key)) days.set(key, []);
+    days.get(key).push({ habit: c.habit, date });
+  });
+  return days;
+}
+
+function computeStreaks(dayKeys) {
+  const sorted = [...dayKeys].sort((a, b) => a - b);
+
+  let longest = 0;
+  let run = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && sorted[i] - sorted[i - 1] === ONE_DAY_MS) {
+      run++;
+    } else {
+      run = 1;
+    }
+    longest = Math.max(longest, run);
+  }
+
+  let current = 0;
+  if (sorted.length > 0) {
+    const today = dayStart(new Date());
+    const lastDay = sorted[sorted.length - 1];
+    if (today - lastDay <= ONE_DAY_MS) {
+      current = 1;
+      for (let i = sorted.length - 1; i > 0; i--) {
+        if (sorted[i] - sorted[i - 1] === ONE_DAY_MS) {
+          current++;
+        } else {
+          break;
+        }
+      }
+    }
+  }
+
+  return { current, longest };
+}
+
+function renderWeekRow(days, containerEl) {
+  const today = new Date();
+  const todayStart = dayStart(today);
+  const mondayOffset = (today.getDay() + 6) % 7;
+  const monday = todayStart - mondayOffset * ONE_DAY_MS;
+
+  containerEl.innerHTML = "";
+  for (let i = 0; i < 7; i++) {
+    const cellDate = monday + i * ONE_DAY_MS;
+    const done = days.has(cellDate);
+    const isToday = cellDate === todayStart;
+    const isFuture = cellDate > todayStart;
+
+    const cell = document.createElement("div");
+    cell.className = "cell" + (done ? " done" : "") + (isToday ? " today" : "") + (isFuture ? " future" : "");
+
+    const dot = document.createElement("div");
+    dot.className = "dot";
+    dot.innerText = done ? "✓" : "";
+    cell.appendChild(dot);
+
+    const label = document.createElement("div");
+    label.className = "label";
+    label.innerText = WEEKDAY_LABELS[i];
+    cell.appendChild(label);
+
+    containerEl.appendChild(cell);
+  }
+}
+
+function renderDayList(days, containerEl) {
+  containerEl.innerHTML = "";
+  [...days.keys()].sort((a, b) => b - a).forEach(key => {
+    const tasks = days.get(key);
+    const dayDiv = document.createElement("div");
+    dayDiv.className = "day";
+
+    const dateDiv = document.createElement("div");
+    dateDiv.className = "date";
+    dateDiv.innerText = new Date(key).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    dayDiv.appendChild(dateDiv);
+
+    tasks.slice().reverse().forEach(t => {
+      const taskDiv = document.createElement("div");
+      taskDiv.className = "task";
+      taskDiv.innerHTML = `${t.habit} <span class="time">${t.date.toLocaleTimeString()}</span>`;
+      dayDiv.appendChild(taskDiv);
+    });
+
+    containerEl.appendChild(dayDiv);
+  });
+}
 
 connectBtn.onclick = async () => {
   if (!window.ethereum) {
@@ -71,41 +322,103 @@ connectBtn.onclick = async () => {
   statusEl.innerText = "Connected: " + userAddress;
   connectBtn.style.display = "none";
   appEl.style.display = "block";
+
+  todayTasks = loadTasks();
+  renderTasks();
   await refreshData();
 };
 
-checkInBtn.onclick = async () => {
-  const habit = document.getElementById("habitInput").value;
-  if (!habit) return;
-  checkInBtn.disabled = true;
-  checkInBtn.innerText = "Confirming in wallet...";
-  try {
-    const tx = await contract.logCheckIn(habit);
-    checkInBtn.innerText = "Waiting for confirmation...";
-    await tx.wait();
-    statusEl.innerText = "Check-in logged!";
-    await refreshData();
-  } catch (err) {
-    statusEl.innerText = "Error: " + (err.reason || err.message);
-  }
-  checkInBtn.disabled = false;
-  checkInBtn.innerText = "Log Today's Check-in";
+addTaskBtn.onclick = () => {
+  const name = taskInput.value.trim();
+  if (!name) return;
+  todayTasks.push({ name, done: false });
+  saveTasks();
+  taskInput.value = "";
+  renderTasks();
+};
+
+taskInput.onkeydown = (e) => {
+  if (e.key === "Enter") addTaskBtn.click();
 };
 
 async function refreshData() {
-  const streak = await contract.getCurrentStreak(userAddress);
-  streakEl.innerText = streak.toString();
-
   const checkIns = await contract.getCheckIns(userAddress);
-  historyEl.innerHTML = "";
-  checkIns.slice().reverse().forEach(c => {
-    const date = new Date(c.timestamp.toNumber() * 1000).toLocaleString();
-    const div = document.createElement("div");
-    div.className = "checkin";
-    div.innerText = `${c.habit} — ${date}`;
-    historyEl.appendChild(div);
-  });
+  totalCheckInsEl.innerText = checkIns.length;
+
+  const days = groupByDay(checkIns);
+  const { current, longest } = computeStreaks([...days.keys()]);
+  streakEl.innerText = current;
+  longestStreakEl.innerText = longest;
+  myCurrentStreak = current;
+
+  renderWeekRow(days, weekRowEl);
+  renderDayList(days, historyEl);
 }
+
+function fallbackCopy(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const ok = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  return ok;
+}
+
+shareBtn.onclick = async () => {
+  const text = `🔥 I'm on a ${myCurrentStreak}-day streak on StreakChain — tracking my daily work habit onchain on Monad. ${SITE_URL}`;
+  let copied = false;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    copied = true;
+  } catch (err) {
+    copied = fallbackCopy(text);
+  }
+
+  const originalLabel = shareBtn.innerText;
+  shareBtn.innerText = copied ? "Copied!" : "Copy failed — try again";
+  setTimeout(() => { shareBtn.innerText = originalLabel; }, 1800);
+};
+
+lookupBtn.onclick = async () => {
+  const address = lookupInput.value.trim();
+  if (!ethers.utils.isAddress(address)) {
+    lookupStatusEl.innerText = "That doesn't look like a valid wallet address.";
+    lookupResultEl.style.display = "none";
+    return;
+  }
+
+  lookupBtn.disabled = true;
+  lookupBtn.innerText = "Loading...";
+  lookupStatusEl.innerText = "";
+
+  try {
+    const checkIns = await readContract.getCheckIns(address);
+    if (checkIns.length === 0) {
+      lookupStatusEl.innerText = "No check-ins found for this address yet.";
+      lookupResultEl.style.display = "none";
+    } else {
+      const days = groupByDay(checkIns);
+      const { current, longest } = computeStreaks([...days.keys()]);
+      lookupStreakEl.innerText = `Current streak: ${current}`;
+      lookupLongestEl.innerText = longest;
+      lookupTotalEl.innerText = checkIns.length;
+      renderWeekRow(days, lookupWeekEl);
+      renderDayList(days, lookupHistoryEl);
+      lookupResultEl.style.display = "block";
+    }
+  } catch (err) {
+    lookupStatusEl.innerText = "Error: " + (err.reason || err.message);
+    lookupResultEl.style.display = "none";
+  }
+
+  lookupBtn.disabled = false;
+  lookupBtn.innerText = "View";
+};
 </script>
 
 </body>
