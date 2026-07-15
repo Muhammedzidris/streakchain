@@ -18,10 +18,15 @@ edit past history.
 ## How it works
 
 - **Smart contract** (`contracts/StreakChain.sol`): a small Solidity contract that stores each
-  check-in (habit name + block timestamp) per wallet address, and computes the current streak by
-  walking back through consecutive check-ins.
-- **Frontend** (`site/index.html`): a single static HTML page (no build step, no framework) that
-  connects to MetaMask, calls the contract to log a check-in, and displays your streak and history.
+  check-in (task name + block timestamp) per wallet address.
+- **Frontend** (`docs/index.html`): a single static HTML page (no build step, no framework) that
+  connects to MetaMask and reads/writes to the contract with ethers.js. Streaks are computed
+  client-side from onchain check-in data, grouped by calendar day. Features:
+  - **Today's Tasks** — add the tasks you plan to do today, check each one off to log it onchain
+  - **This Week** — a Mon–Sun strip showing which days you've checked in
+  - **Daily Log** — check-ins grouped by day, with current streak, longest streak, and total count
+  - **Public streak lookup** — paste any wallet address to view its streak read-only, no wallet needed
+  - **Copy My Streak** — share your current streak as text
 
 ## Deployed contract
 
