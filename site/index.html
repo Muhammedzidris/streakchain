@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>StreakChain</title>
+<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+<style>
+  body { font-family: -apple-system, sans-serif; max-width: 500px; margin: 60px auto; padding: 0 20px; background: #0f1117; color: #eee; }
+  h1 { font-size: 28px; }
+  button { background: #4f9dff; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-size: 15px; cursor: pointer; margin-top: 10px; }
+  button:disabled { background: #555; cursor: not-allowed; }
+  input { padding: 10px; width: 100%; border-radius: 8px; border: 1px solid #444; background: #1a1d27; color: #eee; margin-top: 10px; box-sizing: border-box; }
+  #status { margin-top: 15px; color: #9ab; font-size: 14px; }
+  .checkin { background: #1a1d27; padding: 10px; border-radius: 8px; margin-top: 8px; }
+  #streak { font-size: 40px; font-weight: bold; color: #4f9dff; }
+</style>
+</head>
+<body>
+
+<h1>🔥 StreakChain</h1>
+<p>A tamper-proof onchain record of your work habit.</p>
+
+<button id="connectBtn">Connect Wallet</button>
+<div id="status"></div>
+
+<div id="app" style="display:none;">
+  <p>Current streak:</p>
+  <div id="streak">-</div>
+
+  <input id="habitInput" placeholder="e.g. Deep work session" value="Deep work session">
+  <button id="checkInBtn">Log Today's Check-in</button>
+
+  <h3>History</h3>
+  <div id="history"></div>
+</div>
+
+<script>
+const CONTRACT_ADDRESS = "0x9668E06A1a295C9Feeef9E9b85e131efaF7171ed";
+const ABI = [
+  "function logCheckIn(string habit) external",
+  "function getCheckIns(address user) external view returns (tuple(string habit, uint256 timestamp)[])",
+  "function getCurrentStreak(address user) external view returns (uint256)"
+];
+
+let provider, signer, contract, userAddress;
+
+const connectBtn = document.getElementById("connectBtn");
+const checkInBtn = document.getElementById("checkInBtn");
+const statusEl = document.getElementById("status");
+const appEl = document.getElementById("app");
+const streakEl = document.getElementById("streak");
+const historyEl = document.getElementById("history");
+
+connectBtn.onclick = async () => {
+  if (!window.ethereum) {
+    statusEl.innerText = "No wallet found. Please install MetaMask.";
+    return;
+  }
+  provider = new ethers.providers.Web3Provider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  signer = provider.getSigner();
+  userAddress = await signer.getAddress();
+
+  const network = await provider.getNetwork();
+  if (network.chainId !== 10143) {
+    statusEl.innerText = "Please switch your wallet to Monad Testnet (Chain ID 10143).";
+    return;
+  }
+
+  contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+  statusEl.innerText = "Connected: " + userAddress;
+  connectBtn.style.display = "none";
+  appEl.style.display = "block";
+  await refreshData();
+};
+
+checkInBtn.onclick = async () => {
+  const habit = document.getElementById("habitInput").value;
+  if (!habit) return;
+  checkInBtn.disabled = true;
+  checkInBtn.innerText = "Confirming in wallet...";
+  try {
+    const tx = await contract.logCheckIn(habit);
+    checkInBtn.innerText = "Waiting for confirmation...";
+    await tx.wait();
+    statusEl.innerText = "Check-in logged!";
+    await refreshData();
+  } catch (err) {
+    statusEl.innerText = "Error: " + (err.reason || err.message);
+  }
+  checkInBtn.disabled = false;
+  checkInBtn.innerText = "Log Today's Check-in";
+};
+
+async function refreshData() {
+  const streak = await contract.getCurrentStreak(userAddress);
+  streakEl.innerText = streak.toString();
+
+  const checkIns = await contract.getCheckIns(userAddress);
+  historyEl.innerHTML = "";
+  checkIns.slice().reverse().forEach(c => {
+    const date = new Date(c.timestamp.toNumber() * 1000).toLocaleString();
+    const div = document.createElement("div");
+    div.className = "checkin";
+    div.innerText = `${c.habit} — ${date}`;
+    historyEl.appendChild(div);
+  });
+}
+</script>
+
+</body>
+</html>
