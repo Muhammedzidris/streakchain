@@ -31,9 +31,9 @@ edit past history.
 ## Running it locally
 
 1. Clone this repo
-2. Serve the `site/` folder over HTTP (needed for MetaMask's extension to inject into the page), e.g.:
+2. Serve the `docs/` folder over HTTP (needed for MetaMask's extension to inject into the page), e.g.:
    ```
-   cd site
+   cd docs
    python -m http.server 8000
    ```
 3. Open `http://localhost:8000`, click **Connect Wallet**, and log a check-in
