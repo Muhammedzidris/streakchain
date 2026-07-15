@@ -44,7 +44,7 @@ Hosted via GitHub Pages: https://muhammedzidris.github.io/streakchain/
 
 ## Screenshots
 
-_(added below)_
+![StreakChain app showing a current streak of 4](screenshot.png)
 
 ## Tech stack
 
